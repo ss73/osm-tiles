@@ -39,6 +39,12 @@
     <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
     <label><input type="checkbox" id="toggle-borders" checked> Land borders</label>
     <label><input type="checkbox" id="toggle-maritime" checked> Sea borders</label>
+    <hr style="margin: 4px 0;">
+    <strong>View</strong>
+    <label><input type="radio" name="view" value="2d" checked> 2D</label>
+    <label><input type="radio" name="view" value="3d"> 3D</label>
+    <label style="display: flex; align-items: center; gap: 6px;">Pitch <input type="range" id="pitch-slider" min="0" max="70" value="0" style="width: 80px;"></label>
+    <label style="display: flex; align-items: center; gap: 6px;">Bearing <input type="range" id="bearing-slider" min="0" max="360" value="0" style="width: 80px;"></label>
   </div>
 
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
@@ -141,6 +147,40 @@
     document.getElementById('toggle-maritime').addEventListener('change', function () {
       seaBordersVisible = this.checked;
       updateBorderFilters();
+    });
+
+    // View controls: 2D/3D toggle and pitch/bearing sliders
+    var pitchSlider = document.getElementById('pitch-slider');
+    var bearingSlider = document.getElementById('bearing-slider');
+
+    document.querySelectorAll('#style-switcher input[name="view"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (this.value === '3d') {
+          map.easeTo({ pitch: 60, bearing: -20, duration: 800 });
+          pitchSlider.value = 60;
+          bearingSlider.value = 340;
+        } else {
+          map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+          pitchSlider.value = 0;
+          bearingSlider.value = 0;
+        }
+      });
+    });
+
+    pitchSlider.addEventListener('input', function () {
+      map.setPitch(Number(this.value));
+    });
+
+    bearingSlider.addEventListener('input', function () {
+      map.setBearing(Number(this.value));
+    });
+
+    // Keep sliders in sync when user drags/rotates the map directly
+    map.on('pitchend', function () {
+      pitchSlider.value = Math.round(map.getPitch());
+    });
+    map.on('rotate', function () {
+      bearingSlider.value = Math.round((map.getBearing() + 360) % 360);
     });
 
     // Style switcher
