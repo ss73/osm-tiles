@@ -25,9 +25,7 @@
     "openmaptiles": {
       "type": "vector",
       "url": "http://localhost:3000/sweden",
-      "tiles": [
-        "http://localhost:3000/sweden/{z}/{x}/{y}"
-      ]
+      "maxzoom": 14
     }
   },
   "sprite": "http://localhost:3000/sprite/sprites",
@@ -280,7 +278,8 @@
       "type": "fill",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 12,
+      "minzoom": 13,
+      "maxzoom": 14,
       "filter": [
         "==",
         "$type",
@@ -290,6 +289,18 @@
         "fill-antialias": true,
         "fill-color": "rgb(10,10,10)",
         "fill-outline-color": "rgb(27 ,27 ,29)"
+      }
+    },
+    {
+      "id": "building-3d",
+      "type": "fill-extrusion",
+      "source": "openmaptiles",
+      "source-layer": "building",
+      "minzoom": 14,
+      "paint": {
+        "fill-extrusion-color": "rgb(10,10,10)",
+        "fill-extrusion-height": 0,
+        "fill-extrusion-opacity": 1
       }
     },
     {

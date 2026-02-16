@@ -10,9 +10,7 @@
     "openmaptiles": {
       "type": "vector",
       "url": "http://localhost:3000/sweden",
-      "tiles": [
-        "http://localhost:3000/sweden/{z}/{x}/{y}"
-      ]
+      "maxzoom": 14
     },
     "natural_earth_shaded_relief": {
       "maxzoom": 6,
