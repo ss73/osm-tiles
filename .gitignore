@@ -1,0 +1,18 @@
+# Generated tile data
+data/
+*.mbtiles
+*.pmtiles
+*.pbf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.tmp
+.vscode/
+.idea/
+
+# Docker
+*.log

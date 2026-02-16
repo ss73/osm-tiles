@@ -1,0 +1,19 @@
+services:
+  martin:
+    image: ghcr.io/maplibre/martin
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./styles:/styles
+      - ./fonts:/fonts
+      - ./sprites:/sprites
+    command:
+      - /data/sweden.mbtiles
+      - --font
+      - /fonts
+      - --sprite
+      - /sprites
+      - --style
+      - /styles

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector Tile Server — MapLibre GL JS Demo</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css">
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #style-switcher {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1;
+      background: white;
+      border-radius: 4px;
+      padding: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    #style-switcher label {
+      display: block;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="style-switcher">
+    <strong>Style</strong>
+    <label><input type="radio" name="style" value="osm-liberty" checked> OSM Liberty</label>
+    <label><input type="radio" name="style" value="positron"> Positron</label>
+    <label><input type="radio" name="style" value="dark-matter"> Dark Matter</label>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <script>
+    var TILE_SERVER = 'http://localhost:3000';
+
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: TILE_SERVER + '/style/osm-liberty',
+      center: [18.07, 59.33], // Stockholm
+      zoom: 10
+    });
+
+    map.addControl(new maplibregl.NavigationControl());
+
+    // Feature interaction: show popup on click
+    map.on('click', function (e) {
+      var features = map.queryRenderedFeatures(e.point);
+      if (features.length === 0) return;
+
+      var feature = features[0];
+      var props = feature.properties;
+      var html = '<strong>' + feature.layer.id + '</strong><br>';
+      for (var key in props) {
+        if (props.hasOwnProperty(key)) {
+          html += key + ': ' + props[key] + '<br>';
+        }
+      }
+
+      new maplibregl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
+    });
+
+    // Style switcher
+    document.querySelectorAll('#style-switcher input').forEach(function (input) {
+      input.addEventListener('change', function () {
+        map.setStyle(TILE_SERVER + '/style/' + this.value);
+      });
+    });
+  </script>
+</body>
+</html>

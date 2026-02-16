@@ -40,3 +40,9 @@ decisions and implementation work MUST align with these principles:
 
 Feature planning uses the Specify workflow in `.specify/`. Key commands:
 `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`
+
+## Active Technologies
+- MBTiles (SQLite) — single file per coverage area (001-vector-tile-server)
+
+## Recent Changes
+- 001-vector-tile-server: Added MBTiles (SQLite) — single file per coverage area
