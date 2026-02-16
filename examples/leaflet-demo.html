@@ -27,6 +27,8 @@
   <div id="map"></div>
   <div id="controls">
     <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
+    <label><input type="checkbox" id="toggle-borders" checked> Land borders</label>
+    <label><input type="checkbox" id="toggle-maritime" checked> Sea borders</label>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -50,6 +52,64 @@
           glMap.setLayoutProperty(layer.id, 'visibility', visibility);
         }
       });
+    });
+
+    // Toggle land/sea borders independently
+    var landBordersVisible = document.getElementById('toggle-borders').checked;
+    var seaBordersVisible = document.getElementById('toggle-maritime').checked;
+    var originalBoundaryFilters = {};
+
+    function saveBoundaryFilters(glMap) {
+      originalBoundaryFilters = {};
+      glMap.getStyle().layers.forEach(function (layer) {
+        if (layer.id.indexOf('boundary') === 0) {
+          originalBoundaryFilters[layer.id] = layer.filter ? JSON.parse(JSON.stringify(layer.filter)) : null;
+        }
+      });
+    }
+
+    function updateBorderFilters() {
+      var glMap = glLayer.getMaplibreMap();
+      glMap.getStyle().layers.forEach(function (layer) {
+        if (layer.id.indexOf('boundary') !== 0) return;
+
+        if (!landBordersVisible && !seaBordersVisible) {
+          glMap.setLayoutProperty(layer.id, 'visibility', 'none');
+          return;
+        }
+
+        glMap.setLayoutProperty(layer.id, 'visibility', 'visible');
+        var base = originalBoundaryFilters[layer.id];
+
+        if (landBordersVisible && seaBordersVisible) {
+          glMap.setFilter(layer.id, base);
+        } else {
+          var maritimeCondition = landBordersVisible ? ['!=', 'maritime', 1] : ['==', 'maritime', 1];
+          if (base && base[0] === 'all') {
+            glMap.setFilter(layer.id, base.concat([maritimeCondition]));
+          } else if (base) {
+            glMap.setFilter(layer.id, ['all', base, maritimeCondition]);
+          } else {
+            glMap.setFilter(layer.id, maritimeCondition);
+          }
+        }
+      });
+    }
+
+    glLayer.getMaplibreMap().on('load', function () {
+      var glMap = glLayer.getMaplibreMap();
+      saveBoundaryFilters(glMap);
+      if (!landBordersVisible || !seaBordersVisible) updateBorderFilters();
+    });
+
+    document.getElementById('toggle-borders').addEventListener('change', function () {
+      landBordersVisible = this.checked;
+      updateBorderFilters();
+    });
+
+    document.getElementById('toggle-maritime').addEventListener('change', function () {
+      seaBordersVisible = this.checked;
+      updateBorderFilters();
     });
   </script>
 </body>

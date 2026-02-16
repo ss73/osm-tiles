@@ -34,8 +34,11 @@
     <label><input type="radio" name="style" value="osm-liberty" checked> OSM Liberty</label>
     <label><input type="radio" name="style" value="positron"> Positron</label>
     <label><input type="radio" name="style" value="dark-matter"> Dark Matter</label>
+    <label><input type="radio" name="style" value="blue-dark"> Blue Dark</label>
     <hr style="margin: 4px 0;">
     <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
+    <label><input type="checkbox" id="toggle-borders" checked> Land borders</label>
+    <label><input type="checkbox" id="toggle-maritime" checked> Sea borders</label>
   </div>
 
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
@@ -71,8 +74,12 @@
         .addTo(map);
     });
 
+    // Read initial checkbox state (browser may restore from previous session)
+    var labelsVisible = document.getElementById('toggle-labels').checked;
+    var landBordersVisible = document.getElementById('toggle-borders').checked;
+    var seaBordersVisible = document.getElementById('toggle-maritime').checked;
+
     // Toggle labels
-    var labelsVisible = true;
     function setLabelsVisibility(visible) {
       var visibility = visible ? 'visible' : 'none';
       map.getStyle().layers.forEach(function (layer) {
@@ -87,18 +94,73 @@
       setLabelsVisibility(this.checked);
     });
 
+    // Toggle land/sea borders independently
+    var originalBoundaryFilters = {};
+
+    function saveBoundaryFilters() {
+      originalBoundaryFilters = {};
+      map.getStyle().layers.forEach(function (layer) {
+        if (layer.id.indexOf('boundary') === 0) {
+          originalBoundaryFilters[layer.id] = layer.filter ? JSON.parse(JSON.stringify(layer.filter)) : null;
+        }
+      });
+    }
+
+    function updateBorderFilters() {
+      map.getStyle().layers.forEach(function (layer) {
+        if (layer.id.indexOf('boundary') !== 0) return;
+
+        if (!landBordersVisible && !seaBordersVisible) {
+          map.setLayoutProperty(layer.id, 'visibility', 'none');
+          return;
+        }
+
+        map.setLayoutProperty(layer.id, 'visibility', 'visible');
+        var base = originalBoundaryFilters[layer.id];
+
+        if (landBordersVisible && seaBordersVisible) {
+          map.setFilter(layer.id, base);
+        } else {
+          var maritimeCondition = landBordersVisible ? ['!=', 'maritime', 1] : ['==', 'maritime', 1];
+          if (base && base[0] === 'all') {
+            map.setFilter(layer.id, base.concat([maritimeCondition]));
+          } else if (base) {
+            map.setFilter(layer.id, ['all', base, maritimeCondition]);
+          } else {
+            map.setFilter(layer.id, maritimeCondition);
+          }
+        }
+      });
+    }
+
+    document.getElementById('toggle-borders').addEventListener('change', function () {
+      landBordersVisible = this.checked;
+      updateBorderFilters();
+    });
+
+    document.getElementById('toggle-maritime').addEventListener('change', function () {
+      seaBordersVisible = this.checked;
+      updateBorderFilters();
+    });
+
     // Style switcher
+    var pendingStyleLoad = true;
     document.querySelectorAll('#style-switcher input[name="style"]').forEach(function (input) {
       input.addEventListener('change', function () {
+        pendingStyleLoad = true;
         map.setStyle(TILE_SERVER + '/style/' + this.value);
       });
     });
 
-    // Re-apply label toggle after style change
+    // Save original filters only on initial load and style switches (NOT on our own filter changes)
     map.on('styledata', function () {
-      if (!labelsVisible) {
-        setTimeout(function () { setLabelsVisibility(false); }, 100);
-      }
+      if (!pendingStyleLoad) return;
+      pendingStyleLoad = false;
+      setTimeout(function () {
+        saveBoundaryFilters();
+        if (!labelsVisible) setLabelsVisibility(false);
+        if (!landBordersVisible || !seaBordersVisible) updateBorderFilters();
+      }, 100);
     });
   </script>
 </body>
