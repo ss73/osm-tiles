@@ -9,10 +9,25 @@
   <style>
     body { margin: 0; padding: 0; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      border-radius: 4px;
+      padding: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="controls">
+    <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
+  </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
@@ -22,9 +37,20 @@
 
     var map = L.map('map').setView([59.33, 18.07], 10); // Stockholm
 
-    L.maplibreGL({
+    var glLayer = L.maplibreGL({
       style: TILE_SERVER + '/style/osm-liberty'
     }).addTo(map);
+
+    // Toggle labels via the underlying MapLibre GL map
+    document.getElementById('toggle-labels').addEventListener('change', function () {
+      var glMap = glLayer.getMaplibreMap();
+      var visibility = this.checked ? 'visible' : 'none';
+      glMap.getStyle().layers.forEach(function (layer) {
+        if (layer.type === 'symbol') {
+          glMap.setLayoutProperty(layer.id, 'visibility', visibility);
+        }
+      });
+    });
   </script>
 </body>
 </html>

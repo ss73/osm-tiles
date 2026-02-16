@@ -34,6 +34,8 @@
     <label><input type="radio" name="style" value="osm-liberty" checked> OSM Liberty</label>
     <label><input type="radio" name="style" value="positron"> Positron</label>
     <label><input type="radio" name="style" value="dark-matter"> Dark Matter</label>
+    <hr style="margin: 4px 0;">
+    <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
   </div>
 
   <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
@@ -69,11 +71,34 @@
         .addTo(map);
     });
 
+    // Toggle labels
+    var labelsVisible = true;
+    function setLabelsVisibility(visible) {
+      var visibility = visible ? 'visible' : 'none';
+      map.getStyle().layers.forEach(function (layer) {
+        if (layer.type === 'symbol') {
+          map.setLayoutProperty(layer.id, 'visibility', visibility);
+        }
+      });
+      labelsVisible = visible;
+    }
+
+    document.getElementById('toggle-labels').addEventListener('change', function () {
+      setLabelsVisibility(this.checked);
+    });
+
     // Style switcher
-    document.querySelectorAll('#style-switcher input').forEach(function (input) {
+    document.querySelectorAll('#style-switcher input[name="style"]').forEach(function (input) {
       input.addEventListener('change', function () {
         map.setStyle(TILE_SERVER + '/style/' + this.value);
       });
+    });
+
+    // Re-apply label toggle after style change
+    map.on('styledata', function () {
+      if (!labelsVisible) {
+        setTimeout(function () { setLabelsVisibility(false); }, 100);
+      }
     });
   </script>
 </body>
