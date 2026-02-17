@@ -81,8 +81,8 @@ EXTRA_ARGS=()
 MEMORY_NUM="${MEMORY%g}"
 if [[ "$AREA" == "planet" || "$AREA" == "europe" || "$AREA" == "north-america" ]] && [ "$MEMORY_NUM" -le 16 ]; then
   EXTRA_ARGS+=(
-    --nodemap-type=sortexternally
-    --storage=mmap
+    --nodemap-type=sortedtable
+    --nodemap-storage=mmap
     --building-merge-z13=false
   )
   MODE="disk-backed"
