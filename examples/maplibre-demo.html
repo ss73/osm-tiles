@@ -42,6 +42,7 @@
     <hr style="margin: 4px 0;">
     <strong>Overlays</strong>
     <label><input type="checkbox" id="toggle-heatmap"> Road density</label>
+    <label><input type="checkbox" id="toggle-transit"> Public transport</label>
     <hr style="margin: 4px 0;">
     <strong>View</strong>
     <label><input type="radio" name="view" value="2d" checked> 2D</label>
@@ -250,6 +251,92 @@
       }
     });
 
+    // Public transport overlay
+    var transitVisible = document.getElementById('toggle-transit').checked;
+
+    var transitTypes = [
+      { id: 'transit-bus',     label: 'B', color: '#E6B800', filter: ['==', ['get', 'class'], 'bus'] },
+      { id: 'transit-subway',  label: 'M', color: '#1565C0', filter: ['any', ['all', ['==', ['get', 'class'], 'railway'], ['==', ['get', 'subclass'], 'subway']], ['==', ['get', 'subclass'], 'subway_entrance']] },
+      { id: 'transit-train',   label: 'R', color: '#212121', filter: ['all', ['==', ['get', 'class'], 'railway'], ['any', ['==', ['get', 'subclass'], 'station'], ['==', ['get', 'subclass'], 'halt']]] },
+      { id: 'transit-tram',    label: 'L', color: '#EF6C00', filter: ['all', ['==', ['get', 'class'], 'railway'], ['==', ['get', 'subclass'], 'tram_stop']] },
+      { id: 'transit-ferry',   label: 'F', color: '#0277BD', filter: ['==', ['get', 'class'], 'ferry_terminal'] }
+    ];
+
+    function createTransitIcon(letter, colorHex) {
+      // Draw icon on a temporary canvas, extract raw pixels
+      var size = 32;
+      var canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      var ctx = canvas.getContext('2d');
+      var r = size / 2;
+      // White border
+      ctx.beginPath();
+      ctx.arc(r, r, r - 1, 0, Math.PI * 2);
+      ctx.fillStyle = 'white';
+      ctx.fill();
+      // Colored fill
+      ctx.beginPath();
+      ctx.arc(r, r, r - 3, 0, Math.PI * 2);
+      ctx.fillStyle = colorHex;
+      ctx.fill();
+      // Letter
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, r, r + 1);
+      // Extract as raw Uint8Array
+      var imageData = ctx.getImageData(0, 0, size, size);
+      return { width: size, height: size, data: new Uint8Array(imageData.data.buffer) };
+    }
+
+    function addTransitLayers() {
+      transitTypes.forEach(function (t) {
+        var iconName = t.id + '-icon';
+        if (!map.hasImage(iconName)) {
+          map.addImage(iconName, createTransitIcon(t.label, t.color));
+        }
+        if (map.getLayer(t.id)) return;
+        map.addLayer({
+          id: t.id,
+          type: 'symbol',
+          source: 'openmaptiles',
+          'source-layer': 'poi',
+          minzoom: 12,
+          filter: t.filter,
+          layout: {
+            'icon-image': iconName,
+            'icon-allow-overlap': false,
+            'icon-padding': 2,
+            'text-field': ['step', ['zoom'], '', 14, ['coalesce', ['get', 'name:sv'], ['get', 'name']]],
+            'text-font': ['Roboto Regular'],
+            'text-size': 11,
+            'text-offset': [0, 1.4],
+            'text-anchor': 'top',
+            'text-optional': true,
+            'visibility': transitVisible ? 'visible' : 'none'
+          },
+          paint: {
+            'text-color': t.color,
+            'text-halo-color': 'white',
+            'text-halo-width': 1.5
+          }
+        });
+      });
+    }
+
+    function setTransitVisibility(visible) {
+      transitVisible = visible;
+      transitTypes.forEach(function (t) {
+        if (map.getLayer(t.id)) map.setLayoutProperty(t.id, 'visibility', visible ? 'visible' : 'none');
+      });
+    }
+
+    document.getElementById('toggle-transit').addEventListener('change', function () {
+      setTransitVisibility(this.checked);
+    });
+
     // Style switcher
     var pendingStyleLoad = true;
     document.querySelectorAll('#style-switcher input[name="style"]').forEach(function (input) {
@@ -268,6 +355,7 @@
         if (!labelsVisible) setLabelsVisibility(false);
         if (!landBordersVisible || !seaBordersVisible) updateBorderFilters();
         addHeatmapLayer();
+        addTransitLayers();
       }, 100);
     });
   </script>
