@@ -40,6 +40,13 @@
     <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
     <label><input type="checkbox" id="toggle-pois" checked> POIs</label>
     <label><input type="checkbox" id="toggle-airports" checked> Airports</label>
+    <label><input type="checkbox" id="toggle-3d"> 3D Buildings</label>
+    <hr style="margin: 4px 0;">
+    <strong>View</strong>
+    <label><input type="radio" name="view" value="2d" checked> 2D</label>
+    <label><input type="radio" name="view" value="3d"> 3D</label>
+    <label style="display: flex; align-items: center; gap: 6px;">Pitch <input type="range" id="pitch-slider" min="0" max="70" value="0" style="width: 80px;"></label>
+    <label style="display: flex; align-items: center; gap: 6px;">Bearing <input type="range" id="bearing-slider" min="0" max="360" value="0" style="width: 80px;"></label>
   </div>
 
   <!-- PMTiles — client-side protocol handler for range-request tile fetching -->
@@ -56,8 +63,56 @@
     var protocol = new pmtiles.Protocol({ metadata: true });
     maplibregl.addProtocol('pmtiles', protocol.tile);
 
+    // Building colors per flavor (matching basemaps defaults)
+    var BUILDING_COLORS = {
+      light: { fill: '#cccccc', extrusion: '#ddd' },
+      dark:  { fill: '#111111', extrusion: '#222' },
+      grayscale: { fill: '#c0c0c0', extrusion: '#ccc' }
+    };
+
+    var buildings3dEnabled = false;
+
     // Build a complete MapLibre style object for a given Protomaps flavor
     function buildStyle(flavorName) {
+      var layers = basemaps.layers('protomaps', basemaps.namedFlavor(flavorName), { lang: 'en' });
+
+      if (buildings3dEnabled) {
+        var colors = BUILDING_COLORS[flavorName] || BUILDING_COLORS.light;
+        // Replace the flat "buildings" fill layer with flat + extrusion pair
+        layers = layers.reduce(function (acc, layer) {
+          if (layer.id === 'buildings') {
+            // Flat fill for z13-14 (before extrusion kicks in)
+            acc.push({
+              id: 'buildings',
+              type: 'fill',
+              source: 'protomaps',
+              'source-layer': 'buildings',
+              maxzoom: 14,
+              filter: ['in', 'kind', 'building', 'building_part'],
+              paint: { 'fill-color': colors.fill, 'fill-opacity': 0.5 }
+            });
+            // 3D extrusion for z14+
+            acc.push({
+              id: 'buildings-3d',
+              type: 'fill-extrusion',
+              source: 'protomaps',
+              'source-layer': 'buildings',
+              minzoom: 14,
+              filter: ['in', 'kind', 'building', 'building_part'],
+              paint: {
+                'fill-extrusion-color': colors.extrusion,
+                'fill-extrusion-height': ['coalesce', ['get', 'height'], 5],
+                'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0],
+                'fill-extrusion-opacity': 0.8
+              }
+            });
+          } else {
+            acc.push(layer);
+          }
+          return acc;
+        }, []);
+      }
+
       return {
         version: 8,
         glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
@@ -69,7 +124,7 @@
             attribution: '\u00a9 <a href="https://openstreetmap.org">OpenStreetMap</a> · <a href="https://protomaps.com">Protomaps</a>'
           }
         },
-        layers: basemaps.layers('protomaps', basemaps.namedFlavor(flavorName), { lang: 'en' })
+        layers: layers
       };
     }
 
@@ -231,6 +286,34 @@
         if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
       });
     });
+
+    document.getElementById('toggle-3d').addEventListener('change', function () {
+      buildings3dEnabled = this.checked;
+      map.setStyle(buildStyle(currentFlavor));
+    });
+
+    // View controls
+    var pitchSlider = document.getElementById('pitch-slider');
+    var bearingSlider = document.getElementById('bearing-slider');
+
+    document.querySelectorAll('#controls input[name="view"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (this.value === '3d') {
+          map.easeTo({ pitch: 60, bearing: -20, duration: 800 });
+          pitchSlider.value = 60;
+          bearingSlider.value = 340;
+        } else {
+          map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+          pitchSlider.value = 0;
+          bearingSlider.value = 0;
+        }
+      });
+    });
+
+    pitchSlider.addEventListener('input', function () { map.setPitch(Number(this.value)); });
+    bearingSlider.addEventListener('input', function () { map.setBearing(Number(this.value)); });
+    map.on('pitchend', function () { pitchSlider.value = Math.round(map.getPitch()); });
+    map.on('rotate', function () { bearingSlider.value = Math.round((map.getBearing() + 360) % 360); });
 
     // Style switcher — regenerate style and preserve map position
     document.querySelectorAll('#controls input[name="style"]').forEach(function (input) {
