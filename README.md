@@ -74,6 +74,27 @@ Full-featured demo with:
 Lightweight demo using Leaflet with a MapLibre GL layer underneath.
 Includes label and border toggles.
 
+### Protomaps Evaluation (`protomaps/examples/maplibre-demo.html`)
+
+Alternative tile stack using [Protomaps](https://protomaps.com) PMTiles —
+no tile server required. Tiles are fetched via HTTP range requests
+directly from a remote PMTiles file.
+
+- **Style switcher** — Light, Dark, Grayscale (Protomaps basemaps)
+- **Layer toggles** — labels, POIs, airports
+- **Clustered airport overlay** — 5,245 world airports with interactive clustering
+- **Feature inspector** — click any feature to inspect properties
+
+```bash
+# Start the dev server (includes CORS proxy for upstream tiles)
+python3 protomaps/serve.py
+
+# Open http://localhost:8080/examples/maplibre-demo.html
+```
+
+See [protomaps/README.md](protomaps/README.md) for details on the
+Protomaps evaluation, tile schema differences, and CORS proxy.
+
 ## Project Structure
 
 ```
@@ -92,6 +113,10 @@ scripts/
 examples/
   maplibre-demo.html        # MapLibre GL JS demo
   leaflet-demo.html         # Leaflet demo
+protomaps/                  # Protomaps evaluation (PMTiles)
+  serve.py                  # Dev server with CORS proxy + disk cache
+  data/airports.geojson     # World airports for clustering demo
+  examples/maplibre-demo.html
 data/                       # Generated tiles (gitignored)
 ```
 
@@ -124,4 +149,5 @@ The only files needed are `docker-compose.yml`, `styles/`, `fonts/`,
 ## Documentation
 
 Detailed specs and design decisions are in
-[specs/001-vector-tile-server/](specs/001-vector-tile-server/).
+[specs/001-vector-tile-server/](specs/001-vector-tile-server/) and
+[specs/002-protomaps-evaluation/](specs/002-protomaps-evaluation/).
