@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Dev server that serves local files and proxies PMTiles requests with CORS.
+"""Dev server that serves local PMTiles files or proxies from upstream.
 
-Supports a special /tiles/latest.pmtiles path that auto-resolves to the most
-recent daily build on build.protomaps.com (tries today, then up to 7 days back).
+By default, serves local tiles from data/planet-latest.pmtiles if present.
+Use --proxy to force proxying from build.protomaps.com instead.
+
+Supports a special /tiles/latest.pmtiles path that resolves to either the
+local file or the most recent upstream daily build (depending on mode).
 
 Includes a disk-based cache for proxied tile responses that persists across
 server restarts.
 """
 
+import argparse
 import http.server
 import urllib.request
 import ssl
-import sys
 import os
 import json
 import hashlib
@@ -23,7 +26,13 @@ ssl_ctx.verify_mode = ssl.CERT_NONE
 
 PMTILES_UPSTREAM = "https://build.protomaps.com"
 UA = "Mozilla/5.0 (pmtiles-proxy)"
-CACHE_DIR = os.path.join(os.path.dirname(__file__) or ".", ".cache")
+BASE_DIR = os.path.dirname(__file__) or "."
+DATA_DIR = os.path.join(BASE_DIR, "data")
+CACHE_DIR = os.path.join(BASE_DIR, ".cache")
+LOCAL_TILE = os.path.join(DATA_DIR, "planet-latest.pmtiles")
+
+# Runtime config — set in main()
+_config = {"proxy": False}
 
 # Cache the resolved latest build date to avoid repeated HEAD requests
 _latest_cache = {"date": None, "checked": None}
@@ -82,9 +91,9 @@ def resolve_latest():
     return None
 
 
-class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
+class CORSHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=os.path.dirname(__file__) or ".", **kwargs)
+        super().__init__(*args, directory=BASE_DIR, **kwargs)
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -104,11 +113,80 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/tiles/"):
-            self._proxy(self.path[len("/tiles/"):])
+            filename = self.path[len("/tiles/"):]
+            if _config["proxy"]:
+                self._proxy(filename)
+            else:
+                self._serve_local(filename)
         else:
             super().do_GET()
 
+    def _serve_local(self, filename):
+        """Serve a PMTiles file from the local data directory with Range support."""
+        if filename == "latest.pmtiles":
+            filepath = LOCAL_TILE
+        else:
+            filepath = os.path.join(DATA_DIR, filename)
+
+        # Resolve symlinks for existence check
+        try:
+            real_path = os.path.realpath(filepath)
+        except OSError:
+            real_path = filepath
+
+        if not os.path.isfile(real_path):
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Not found")
+            return
+
+        file_size = os.path.getsize(real_path)
+        range_header = self.headers.get("Range")
+
+        if range_header:
+            # Parse Range: bytes=START-END
+            try:
+                range_spec = range_header.replace("bytes=", "")
+                parts = range_spec.split("-")
+                start = int(parts[0]) if parts[0] else 0
+                end = int(parts[1]) if parts[1] else file_size - 1
+                end = min(end, file_size - 1)
+                length = end - start + 1
+            except (ValueError, IndexError):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+
+            with open(real_path, "rb") as f:
+                f.seek(start)
+                body = f.read(length)
+
+            self.send_response(206)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(length))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        else:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            try:
+                with open(real_path, "rb") as f:
+                    while chunk := f.read(65536):
+                        self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
     def _proxy(self, filename):
+        """Proxy a tile request to the upstream Protomaps build server."""
         if filename == "latest.pmtiles":
             filename = resolve_latest()
             if not filename:
@@ -159,9 +237,28 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             pass
 
 
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-print(f"Serving protomaps/ on http://localhost:{port}")
-print(f"Proxying /tiles/* → {PMTILES_UPSTREAM}")
-print(f"Use /tiles/latest.pmtiles for auto-resolved daily build")
-print(f"Disk cache: {CACHE_DIR}")
-http.server.HTTPServer(("", port), CORSProxyHandler).serve_forever()
+parser = argparse.ArgumentParser(description="Protomaps dev server")
+parser.add_argument("-p", "--port", type=int, default=8080, help="port (default: 8080)")
+parser.add_argument("--proxy", action="store_true", help="proxy tiles from upstream instead of serving local files")
+args = parser.parse_args()
+
+_config["proxy"] = args.proxy
+
+has_local = os.path.isfile(LOCAL_TILE) or os.path.islink(LOCAL_TILE)
+if args.proxy:
+    mode = "proxy"
+elif has_local:
+    real = os.path.realpath(LOCAL_TILE)
+    mode = f"local ({os.path.basename(real)})"
+else:
+    _config["proxy"] = True
+    mode = "proxy (no local tile found)"
+
+print(f"Serving protomaps/ on http://localhost:{args.port}")
+print(f"Tile mode: {mode}")
+if _config["proxy"]:
+    print(f"Proxying /tiles/* → {PMTILES_UPSTREAM}")
+    print(f"Disk cache: {CACHE_DIR}")
+else:
+    print(f"Serving /tiles/* from {DATA_DIR}")
+http.server.HTTPServer(("", args.port), CORSHandler).serve_forever()
