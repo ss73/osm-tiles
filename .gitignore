@@ -1,5 +1,6 @@
 # Generated tile data
 data/
+!protomaps/data/
 *.mbtiles
 *.pmtiles
 *.pbf

@@ -92,6 +92,12 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
         super().end_headers()
 
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
@@ -120,7 +126,10 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             for k, v in headers.items():
                 self.send_header(k, v)
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
             return
 
         url = f"{PMTILES_UPSTREAM}/{filename}"
@@ -146,6 +155,8 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
         except urllib.error.HTTPError as e:
             self.send_response(e.code)
             self.end_headers()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
 
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080

@@ -35,6 +35,11 @@
     <label><input type="radio" name="style" value="light" checked> Light</label>
     <label><input type="radio" name="style" value="dark"> Dark</label>
     <label><input type="radio" name="style" value="grayscale"> Grayscale</label>
+    <hr style="margin: 4px 0;">
+    <strong>Layers</strong>
+    <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
+    <label><input type="checkbox" id="toggle-pois" checked> POIs</label>
+    <label><input type="checkbox" id="toggle-airports" checked> Airports</label>
   </div>
 
   <!-- PMTiles — client-side protocol handler for range-request tile fetching -->
@@ -79,8 +84,101 @@
 
     map.addControl(new maplibregl.NavigationControl());
 
+    // --- Airports clustering overlay ---
+    var airportsVisible = true;
+    var AIRPORT_LAYERS = ['airport-clusters', 'airport-cluster-count', 'airport-unclustered'];
+
+    function addAirportLayers() {
+      if (!map.getSource('airports')) {
+        map.addSource('airports', {
+          type: 'geojson',
+          data: '/data/airports.geojson',
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 50
+        });
+      }
+      if (!map.getLayer('airport-clusters')) {
+        map.addLayer({
+          id: 'airport-clusters',
+          type: 'circle',
+          source: 'airports',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': ['step', ['get', 'point_count'],
+              '#51bbd6', 20,
+              '#2196F3', 50,
+              '#1976D2', 100,
+              '#1565C0', 250,
+              '#0D47A1'
+            ],
+            'circle-radius': ['step', ['get', 'point_count'],
+              15, 20, 20, 50, 25, 100, 30, 250, 35
+            ]
+          }
+        });
+        map.addLayer({
+          id: 'airport-cluster-count',
+          type: 'symbol',
+          source: 'airports',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-size': 12
+          },
+          paint: { 'text-color': '#ffffff' }
+        });
+        map.addLayer({
+          id: 'airport-unclustered',
+          type: 'circle',
+          source: 'airports',
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': ['match', ['get', 'type'], 'large', '#E65100', '#FB8C00'],
+            'circle-radius': 5,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff'
+          }
+        });
+      }
+      var vis = airportsVisible ? 'visible' : 'none';
+      AIRPORT_LAYERS.forEach(function (id) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+      });
+    }
+
+    map.on('load', addAirportLayers);
+
+    // Click cluster to zoom in
+    map.on('click', 'airport-clusters', function (e) {
+      var cluster = e.features[0];
+      map.getSource('airports').getClusterExpansionZoom(cluster.properties.cluster_id, function (err, zoom) {
+        if (err) return;
+        map.easeTo({ center: cluster.geometry.coordinates, zoom: zoom });
+      });
+    });
+
+    // Click unclustered airport for popup
+    map.on('click', 'airport-unclustered', function (e) {
+      var f = e.features[0];
+      var p = f.properties;
+      var label = (p.iata ? p.iata + ' / ' : '') + (p.icao || '');
+      var html = '<strong>' + (p.name || 'Airport') + '</strong><br>' + label;
+      if (p.municipality) html += '<br>' + p.municipality + ', ' + (p.country || '');
+      new maplibregl.Popup().setLngLat(f.geometry.coordinates).setHTML(html).addTo(map);
+    });
+
+    map.on('mouseenter', 'airport-clusters', function () { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'airport-clusters', function () { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'airport-unclustered', function () { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'airport-unclustered', function () { map.getCanvas().style.cursor = ''; });
+
     // Feature inspector — click any feature to see its layer and properties
     map.on('click', function (e) {
+      // Skip if an airport layer handled the click
+      var airportHit = map.queryRenderedFeatures(e.point, { layers: AIRPORT_LAYERS.filter(function (id) { return map.getLayer(id); }) });
+      if (airportHit.length > 0) return;
+
       var features = map.queryRenderedFeatures(e.point);
       if (features.length === 0) return;
 
@@ -99,12 +197,62 @@
         .addTo(map);
     });
 
+    // Layer toggles
+    var labelsVisible = true;
+    var poisVisible = true;
+
+    function setLayerVisibility(filter, visible) {
+      var visibility = visible ? 'visible' : 'none';
+      map.getStyle().layers.forEach(function (layer) {
+        if (filter(layer)) {
+          map.setLayoutProperty(layer.id, 'visibility', visibility);
+        }
+      });
+    }
+
+    document.getElementById('toggle-labels').addEventListener('change', function () {
+      labelsVisible = this.checked;
+      setLayerVisibility(function (layer) {
+        return layer.type === 'symbol' && layer['source-layer'] !== 'pois';
+      }, labelsVisible);
+    });
+
+    document.getElementById('toggle-pois').addEventListener('change', function () {
+      poisVisible = this.checked;
+      setLayerVisibility(function (layer) {
+        return layer['source-layer'] === 'pois';
+      }, poisVisible);
+    });
+
+    document.getElementById('toggle-airports').addEventListener('change', function () {
+      airportsVisible = this.checked;
+      var vis = airportsVisible ? 'visible' : 'none';
+      AIRPORT_LAYERS.forEach(function (id) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+      });
+    });
+
     // Style switcher — regenerate style and preserve map position
     document.querySelectorAll('#controls input[name="style"]').forEach(function (input) {
       input.addEventListener('change', function () {
         currentFlavor = this.value;
         map.setStyle(buildStyle(currentFlavor));
       });
+    });
+
+    // Re-apply toggle state and overlays after style switch
+    map.on('styledata', function () {
+      if (!labelsVisible) {
+        setLayerVisibility(function (layer) {
+          return layer.type === 'symbol' && layer['source-layer'] !== 'pois';
+        }, false);
+      }
+      if (!poisVisible) {
+        setLayerVisibility(function (layer) {
+          return layer['source-layer'] === 'pois';
+        }, false);
+      }
+      addAirportLayers();
     });
   </script>
 </body>
