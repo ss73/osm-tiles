@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protomaps Evaluation — MapLibre GL JS Demo</title>
+  <!-- MapLibre GL JS — primary rendering library -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1;
+      background: white;
+      border-radius: 4px;
+      padding: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    #controls label {
+      display: block;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="controls">
+    <strong>Style</strong>
+    <label><input type="radio" name="style" value="light" checked> Light</label>
+    <label><input type="radio" name="style" value="dark"> Dark</label>
+    <label><input type="radio" name="style" value="grayscale"> Grayscale</label>
+  </div>
+
+  <!-- PMTiles — client-side protocol handler for range-request tile fetching -->
+  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@4/dist/pmtiles.js"></script>
+  <!-- Protomaps basemaps — programmatic style generation for Tilezen schema -->
+  <script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js"></script>
+  <script>
+    // Protomaps daily planet build — world coverage, zoom 0–15
+    // See https://maps.protomaps.com/builds/ for available builds
+    var PMTILES_URL = 'http://localhost:8080/tiles/20260218.pmtiles';
+
+    // Register the PMTiles protocol so MapLibre can fetch tiles via range requests
+    var protocol = new pmtiles.Protocol({ metadata: true });
+    maplibregl.addProtocol('pmtiles', protocol.tile);
+
+    // Build a complete MapLibre style object for a given Protomaps flavor
+    function buildStyle(flavorName) {
+      return {
+        version: 8,
+        glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+        sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/' + flavorName,
+        sources: {
+          protomaps: {
+            type: 'vector',
+            url: 'pmtiles://' + PMTILES_URL,
+            attribution: '\u00a9 <a href="https://openstreetmap.org">OpenStreetMap</a> · <a href="https://protomaps.com">Protomaps</a>'
+          }
+        },
+        layers: basemaps.layers('protomaps', basemaps.namedFlavor(flavorName), { lang: 'en' })
+      };
+    }
+
+    // Initialize map with the default "light" flavor, centered on Stockholm
+    var currentFlavor = 'light';
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: buildStyle(currentFlavor),
+      center: [18.07, 59.33],
+      zoom: 10
+    });
+
+    map.addControl(new maplibregl.NavigationControl());
+
+    // Feature inspector — click any feature to see its layer and properties
+    map.on('click', function (e) {
+      var features = map.queryRenderedFeatures(e.point);
+      if (features.length === 0) return;
+
+      var feature = features[0];
+      var props = feature.properties;
+      var html = '<strong>' + feature.layer.id + '</strong><br>';
+      for (var key in props) {
+        if (props.hasOwnProperty(key)) {
+          html += key + ': ' + props[key] + '<br>';
+        }
+      }
+
+      new maplibregl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
+    });
+
+    // Style switcher — regenerate style and preserve map position
+    document.querySelectorAll('#controls input[name="style"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        currentFlavor = this.value;
+        map.setStyle(buildStyle(currentFlavor));
+      });
+    });
+  </script>
+</body>
+</html>

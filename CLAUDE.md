@@ -43,6 +43,8 @@ Feature planning uses the Specify workflow in `.specify/`. Key commands:
 
 ## Active Technologies
 - MBTiles (SQLite) — single file per coverage area (001-vector-tile-server)
+- HTML5 + vanilla JavaScript (no build tooling) (002-protomaps-evaluation)
+- N/A — no server-side storage; tiles fetched from remote PMTiles URL (002-protomaps-evaluation)
 
 ## Recent Changes
 - 001-vector-tile-server: Added MBTiles (SQLite) — single file per coverage area
