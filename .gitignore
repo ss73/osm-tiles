@@ -15,8 +15,9 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Tile proxy cache
+# Tile proxy cache and auto-downloaded tools
 protomaps/.cache/
+protomaps/.bin/
 
 # Docker
 *.log
