@@ -78,22 +78,38 @@ Includes label and border toggles.
 
 Alternative tile stack using [Protomaps](https://protomaps.com) PMTiles —
 no tile server required. Tiles are fetched via HTTP range requests
-directly from a remote PMTiles file.
+from a local or remote PMTiles file.
 
 - **Style switcher** — Light, Dark, Grayscale (Protomaps basemaps)
-- **Layer toggles** — labels, POIs, airports
+- **Layer toggles** — labels, POIs, airports, 3D buildings
+- **3D view** — pitch/bearing controls with 2D/3D presets
+- **3D building extrusions** — Tilezen height data rendered as fill-extrusion at z14+
 - **Clustered airport overlay** — 5,245 world airports with interactive clustering
 - **Feature inspector** — click any feature to inspect properties
 
 ```bash
-# Start the dev server (includes CORS proxy for upstream tiles)
+# 1. Download tiles for a region (auto-downloads pmtiles CLI if needed)
+./protomaps/download-planet.sh sweden     # ~4 GB, ~6 min
+
+# 2. Start the dev server (serves local tiles by default)
 python3 protomaps/serve.py
 
-# Open http://localhost:8080/examples/maplibre-demo.html
+# 3. Open http://localhost:8080/examples/maplibre-demo.html
 ```
 
+The dev server has two tile-serving modes:
+
+- **Local** (default) — serves tiles from `protomaps/data/planet-latest.pmtiles`.
+  No internet needed after the initial download.
+- **Proxy** (`--proxy` flag) — proxies tile requests to `build.protomaps.com`
+  with CORS headers and a disk cache. Used automatically if no local tile exists.
+
+The download script supports 17 regions (sweden, norway, europe, usa, etc.)
+or full planet (~120 GB). Regional extracts use HTTP range requests against
+the remote planet file — only the needed tiles are downloaded.
+
 See [protomaps/README.md](protomaps/README.md) for details on the
-Protomaps evaluation, tile schema differences, and CORS proxy.
+Protomaps evaluation, tile schema differences, and serving modes.
 
 ## Project Structure
 
@@ -115,6 +131,7 @@ examples/
   leaflet-demo.html         # Leaflet demo
 protomaps/                  # Protomaps evaluation (PMTiles)
   serve.py                  # Dev server with CORS proxy + disk cache
+  download-planet.sh        # Download PMTiles (planet or regional extract)
   data/airports.geojson     # World airports for clustering demo
   examples/maplibre-demo.html
 data/                       # Generated tiles (gitignored)
