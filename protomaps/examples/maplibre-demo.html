@@ -35,6 +35,9 @@
     <label><input type="radio" name="style" value="light" checked> Light</label>
     <label><input type="radio" name="style" value="dark"> Dark</label>
     <label><input type="radio" name="style" value="grayscale"> Grayscale</label>
+    <label><input type="radio" name="style" value="zen"> Zen</label>
+    <label><input type="radio" name="style" value="toner"> Toner</label>
+    <label><input type="radio" name="style" value="apollo-bright"> Apollo Bright</label>
     <hr style="margin: 4px 0;">
     <strong>Layers</strong>
     <label><input type="checkbox" id="toggle-labels" checked> Labels</label>
@@ -71,6 +74,49 @@
     };
 
     var buildings3dEnabled = false;
+
+    // Apollo Mapping Tilezen styles — loaded from local JSON files
+    var APOLLO_STYLES = {
+      'zen': 'styles/zen.json',
+      'toner': 'styles/toner.json',
+      'apollo-bright': 'styles/apollo-bright.json'
+    };
+    var APOLLO_RESOURCE_URL = 'https://s3-us-west-1.amazonaws.com/osm-vector-tiles-apollomapping';
+    var apolloStyleCache = {};
+
+    function loadApolloStyle(name) {
+      if (apolloStyleCache[name]) {
+        return Promise.resolve(JSON.parse(JSON.stringify(apolloStyleCache[name])));
+      }
+      return fetch(APOLLO_STYLES[name])
+        .then(function (r) { return r.text(); })
+        .then(function (text) {
+          // Replace templates in raw JSON text before parsing
+          text = text.replace(/\{resource_url\}/g, APOLLO_RESOURCE_URL);
+          text = text.replace(/\{localization_name\}/g, '{name:en}');
+          var style = JSON.parse(text);
+          // Replace template source with PMTiles source
+          style.sources = {
+            osm: {
+              type: 'vector',
+              url: 'pmtiles://' + PMTILES_URL,
+              attribution: '\u00a9 <a href="https://openstreetmap.org">OpenStreetMap</a> · <a href="https://protomaps.com">Protomaps</a>'
+            }
+          };
+          // Apollo Bright: drop the natural_earth raster layer (external tile server)
+          if (name === 'apollo-bright') {
+            style.layers = style.layers.filter(function (layer) {
+              return layer.id !== 'natural_earth';
+            });
+          }
+          apolloStyleCache[name] = style;
+          return style;
+        });
+    }
+
+    function isApolloStyle(name) {
+      return name in APOLLO_STYLES;
+    }
 
     // Build a complete MapLibre style object for a given Protomaps flavor
     function buildStyle(flavorName) {
@@ -289,7 +335,7 @@
 
     document.getElementById('toggle-3d').addEventListener('change', function () {
       buildings3dEnabled = this.checked;
-      map.setStyle(buildStyle(currentFlavor));
+      applyStyle(currentFlavor);
     });
 
     // View controls
@@ -316,10 +362,20 @@
     map.on('rotate', function () { bearingSlider.value = Math.round((map.getBearing() + 360) % 360); });
 
     // Style switcher — regenerate style and preserve map position
+    function applyStyle(name) {
+      currentFlavor = name;
+      if (isApolloStyle(name)) {
+        loadApolloStyle(name).then(function (style) {
+          map.setStyle(style);
+        });
+      } else {
+        map.setStyle(buildStyle(name));
+      }
+    }
+
     document.querySelectorAll('#controls input[name="style"]').forEach(function (input) {
       input.addEventListener('change', function () {
-        currentFlavor = this.value;
-        map.setStyle(buildStyle(currentFlavor));
+        applyStyle(this.value);
       });
     });
 
