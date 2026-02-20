@@ -50,6 +50,7 @@
     <label><input type="radio" name="view" value="3d"> 3D</label>
     <label style="display: flex; align-items: center; gap: 6px;">Pitch <input type="range" id="pitch-slider" min="0" max="70" value="0" style="width: 80px;"></label>
     <label style="display: flex; align-items: center; gap: 6px;">Bearing <input type="range" id="bearing-slider" min="0" max="360" value="0" style="width: 80px;"></label>
+    <span id="zoom-display" style="display: block; padding: 4px 0; color: #666;">Zoom: 10.0</span>
   </div>
 
   <!-- PMTiles — client-side protocol handler for range-request tile fetching -->
@@ -358,6 +359,8 @@
 
     pitchSlider.addEventListener('input', function () { map.setPitch(Number(this.value)); });
     bearingSlider.addEventListener('input', function () { map.setBearing(Number(this.value)); });
+    var zoomDisplay = document.getElementById('zoom-display');
+    map.on('zoom', function () { zoomDisplay.textContent = 'Zoom: ' + map.getZoom().toFixed(1); });
     map.on('pitchend', function () { pitchSlider.value = Math.round(map.getPitch()); });
     map.on('rotate', function () { bearingSlider.value = Math.round((map.getBearing() + 360) % 360); });
 
